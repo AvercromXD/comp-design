@@ -19,6 +19,7 @@ executable l1c
     build-depends:
                   base >= 4.15 && < 5,
                   containers,
+                  unordered-containers,
                   directory,
                   filepath,
                   megaparsec >= 9.7.0,
@@ -33,6 +34,7 @@ executable l1c
                   Compile.Parser,
                   Compile.Semantic,
                   Compile.AAsm,
+                  Compile.AAAST,
                   Error
     hs-source-dirs:   app
     default-language: Haskell2010
