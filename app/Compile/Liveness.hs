@@ -34,16 +34,31 @@ tagLines (Block insts) = execState (tag insts) initialState
   where
     initialState = TaggedVariableLinesState [] [] [HashSet.empty | _ <- insts]
 
+liveness :: TaggedVariableLinesState -> [LiveRegisters]
+liveness state = live $ execState (mapM_ tagLive reverse [0..length live - 1]) state
+
+tagLive :: Line -> TaggedVariableLines ()
+tagLive l = do
+  liveSuccessors <- liveInSuccs l
+  mapM_ (`makeLive` l)  [x | x <- liveSuccessors, y <- (isDefined x line)]
+
+
+validRegistersInLine :: Line -> TaggedVariableLines [Register]
+validRegistersInLine = do
+  liveSuccessors <- liveInSuccs l
+  return [x | x <- liveSuccessors, x ]
+
+
 tag :: [Inst] -> TaggedVariableLines ()
 tag insts = mapM_ (uncurry tagLine) (zip insts [0 ..])
 
-markAsDef :: Integer -> TagMap -> TagMap
+markAsDef :: Register -> TagMap -> TagMap
 markAsDef reg = Map.insert reg (False, True)
 
-markAsUse :: Integer -> TagMap -> TagMap
+markAsUse :: Register -> TagMap -> TagMap
 markAsUse reg = Map.insert reg (True, False)
 
-markAsUseDef :: Integer -> TagMap -> TagMap
+markAsUseDef :: Register -> TagMap -> TagMap
 markAsUseDef reg = Map.insert reg (True, True)
 
 isInUse :: Register -> Line -> TaggedVariableLines Bool
@@ -60,6 +75,27 @@ isDefined r l = do
   let t = maybe False fst $ Map.lookup r m
   return t
 
+liveInSucc :: [Line] -> TaggedVariableLines [Register]
+liveInSucc [] = []
+liveInSucc (x:xs) = do
+  live <- gets live
+  hash <- live !! x
+  return [y | member hash y, y <- registersInLine x] ++ liveInSucc xs
+
+
+liveInSuccs :: Line -> TaggedVariableLines [Register]
+liveInSuccs l = do
+  succs <- gets succs
+  let succ = succs !! l
+  return liveInSucc succ
+
+registersInLine :: Line -> TaggedVariableLines [Register]
+registersInLine l = do
+  a <- gets array
+  let m = a !! fromIntegral l
+  return HashMap.keys m
+
+
 isLive :: Register -> Line -> TaggedVariableLines Bool
 isLive r l = do
   lr <- gets live
@@ -70,7 +106,7 @@ makeLive :: Register -> Line -> TaggedVariableLines ()
 makeLive r l = do
   lr <- gets live
   let m = lr !! fromIntegral l
-  let m2 = HashSet.insert r m 
+  let m2 = HashSet.insert r m
   modify $ \s -> s {live = updateAt (fromIntegral l) m2 lr}
 
 updateAt :: Int -> a -> [a] -> [a]
