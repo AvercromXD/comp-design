@@ -55,7 +55,7 @@ genBlock = mapM_ genStmt
 genStmt :: Stmt -> CodeGen ()
 genStmt (Decl name _) = do
   r <- freshReg
-  emit $ Compile.AAAST.Init r $ Con 0
+  emit $ Compile.AAAST.Init r $ Con "0"
   assignVar name r
 
 genStmt (Compile.AST.Init name e _) = do
@@ -103,13 +103,14 @@ genExpr (UnExpr op e) = do
   -- For unary operations, we can use a dummy second operand (or adapt the AAAST to support unary ops)
   -- Using Con 0 as a placeholder, but this should be adapted to your needs
   case opnd of
-    Reg r -> 
+    Reg r -> do
       emit $ UnOpAsgn r op    
+      return $ Reg r
     Con i -> do
       r <- freshReg
       emit $ Compile.AAAST.Init r (Con i)
       emit $ UnOpAsgn r op
-  return opnd
+      return $ Reg r
 
 genExpr (BinExpr op e1 e2) = do
   opnd1 <- genExpr e1
