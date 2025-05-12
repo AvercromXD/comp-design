@@ -1,22 +1,26 @@
 module Compile.AAsm
- ( codeGen
- ) where
+  ( codeGen,
+  )
+where
 
-import Compile.AST (AST(..), Expr(..), Stmt(..), Op, showAsgnOp)
-import Compile.AAAST (AAAST(..), Inst(..), Operand(..))
+import Compile.AAAST (AAAST (..), Inst (..), Operand (..))
+import Compile.AST (AST (..), Expr (..), Op, Stmt (..), showAsgnOp)
 import Control.Monad.State
 import qualified Data.Map as Map
 
 type VarName = String
+
 type Register = Integer
+
 type RegisterMap = Map.Map VarName Register
+
 type CodeGen a = State CodeGenState a
 
 data CodeGenState = CodeGenState
- { regMap :: RegisterMap
- , nextReg :: Register
- , code :: [Inst]
- }
+  { regMap :: RegisterMap,
+    nextReg :: Register,
+    code :: [Inst]
+  }
 
 -- | Main entry point for code generation
 codeGen :: AST -> AAAST
@@ -55,7 +59,7 @@ genBlock = mapM_ genStmt
 genStmt :: Stmt -> CodeGen ()
 genStmt (Decl name _) = do
   r <- freshReg
-  emit $ Compile.AAAST.Init r $ Con 0
+  emit $ Compile.AAAST.Init r $ Con "0"
   assignVar name r
 
 genStmt (Compile.AST.Init name e _) = do
@@ -93,24 +97,21 @@ genExpr :: Expr -> CodeGen Operand
 genExpr (IntExpr n _) =
   -- Constants are represented directly
   return $ Con n
-
 genExpr (Ident name _) = do
   r <- lookupVar name
   return $ Reg r
-
 genExpr (UnExpr op e) = do
   opnd <- genExpr e
   -- For unary operations, we can use a dummy second operand (or adapt the AAAST to support unary ops)
   -- Using Con 0 as a placeholder, but this should be adapted to your needs
   case opnd of
-    Reg r -> 
-      emit $ UnOpAsgn r op    
+    Reg r ->
+      emit $ UnOpAsgn r op
     Con i -> do
       r <- freshReg
       emit $ Compile.AAAST.Init r (Con i)
       emit $ UnOpAsgn r op
   return opnd
-
 genExpr (BinExpr op e1 e2) = do
   opnd1 <- genExpr e1
   opnd2 <- genExpr e2

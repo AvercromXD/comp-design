@@ -1,42 +1,81 @@
 module Compile.Liveness where
 
 import Compile.AAAST (AAAST (..), Inst (..), Operand (..))
+import Control.Monad.State
+import qualified Data.HashSet as HashSet
+import qualified Data.Map as Map
 
 type Register = Integer
 
 type Line = Integer
 
-data Tag
-  = Def Register
-  | Use Register
-  | Succ Line
-  deriving Eq
+type Use = Bool
 
+type Def = Bool
 
-type Live = Register
+type TagMap = Map.Map Integer (Use, Def)
 
-type TaggedLine = Line Succs [[Tag]]
-type Succs = [Tag]
+type Matrix = [TagMap]
 
-tagInsts :: AAAST -> [(Line, [[Tag]])]
-tagInsts (Block insts) = map (\(line, inst) -> (line, tagInst inst line)) (zip [0 ..] insts)
+type TaggedVariableLines a = State TaggedVariableLinesState a
 
-tagInst :: Inst -> Line -> [Tag]
-tagInst (Init r (Reg i)) l = [Def r, Use i, Succ l + 1]
-tagInst (Init r (Con c)) l = [Def r, Succ l + 1]
-tagInst (Ret (Reg i)) l = [Use i]
-tagInst (Ret (Con c)) l = []
-tagInst (Asgn r _ (Con c)) l = [Def r, Use r, Succ l + 1]
-tagInst (Asgn r _ (Reg i)) l = [Def r, Use r, Use i, Succ l + 1]
+data TaggedVariableLinesState = TaggedVariableLinesState
+  { array :: Matrix,
+    succs :: [[Line]]
+  }
 
-tagLiveInsts :: [(Line, [Tag])] -> [(Line, [Live])]
+numVar :: AAAST -> Integer
+numVar (Block insts) = HashSet.size HashSet.fromList (concat (map listInst insts))
+  where
+    listInst (Init r _) = [r]
+    listInst (Asgn r1 _ (Reg r2)) = [r1, r2]
+    listInst (Asgn r1 _ _) = [r1]
+    listInst (UnOpAsgn r _) = [r]
+    listInst (Ret (Reg r)) = [r]
+    listInst (Ret (Con i)) = []
 
-tagLive :: [(Line, [Tag])] -> Line -> [Tag] -> [Live]
-tagLive lines line tags
-    |
+tagLines :: AAAST -> TaggedVariableLinesState
+tagLines (Block insts) = execState (tag insts) initialState
+  where
+    initialState = TaggedVariableLinesState [] [[]]
 
+tag :: AAAST -> TaggedVariableLines ()
+tag (Block insts) = mapM_ tagLine (zip [0 ..] insts)
 
-hasTag :: [(Line, [Tag])] -> Line -> Tag -> Boolean
-hasTag [] line tag = False
-hasTag ((line, tags) : xs) line tag = elem tag tags
-hasTag (x : xs) line tag = hasTag xs line tag
+tagLine :: Inst -> Line -> TaggedVariableLines ()
+tagLine (Init r1 (Reg r2)) l = do
+  let map :: TagMap = Map.empty
+  Map.insert r1 (False, True) map
+  if r1 == r2 then Map.insert r1 (True, True) map else Map.insert r2 (True, False) map
+  modify $ \s -> s {array = array s ++ [map]}
+  modify $ \s -> s {succs = succs s ++ [l + 1]}
+tagLine (Init r (Con c)) l = do
+  let map :: TagMap = Map.empty
+  Map.insert r (False, True) map
+  modify $ \s -> s {array = array s ++ [map]}
+  modify $ \s -> s {succs = succs s ++ [l + 1]}
+tagLine (Asgn r1 _ (Reg r2)) l = do
+  let map :: TagMap = Map.empty
+  Map.insert r1 (False, True) map
+  if r1 == r2 then Map.insert r1 (True, True) map else Map.insert r2 (True, False) map
+  modify $ \s -> s {array = array s ++ [map]}
+  modify $ \s -> s {succs = succs s ++ [l + 1]}
+tagLine (Asgn r _ (Con c)) l = do
+  let map :: TagMap = Map.empty
+  Map.insert r (False, True) map
+  modify $ \s -> s {array = array s ++ [map]}
+  modify $ \s -> s {succs = succs s ++ [l + 1]}
+tagLine (UnOpAsgn r _) l = do
+  let map :: TagMap = Map.empty
+  Map.insert r (False, True) map
+  modify $ \s -> s {array = array s ++ [map]}
+  modify $ \s -> s {succs = succs s ++ [l + 1]}
+tagLine (Ret (Reg r)) l = do
+  let map :: TagMap = Map.empty
+  Map.insert r (True, False) map
+  modify $ \s -> s {array = array s ++ [map]}
+  modify $ \s -> s {succs = succs s ++ []}
+tagLine (Ret (Con c)) l = do
+  let map = Map.empty
+  modify $ \s -> s {array = array s ++ [map]}
+  modify $ \s -> s {succs = succs s ++ []}

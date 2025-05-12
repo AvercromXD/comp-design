@@ -35,6 +35,7 @@ executable l1c
                   Compile.Semantic,
                   Compile.AAsm,
                   Compile.AAAST,
-                  Error
+                  Error,
+                  Compile.Liveness
     hs-source-dirs:   app
     default-language: Haskell2010
