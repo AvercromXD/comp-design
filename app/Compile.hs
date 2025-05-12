@@ -19,7 +19,9 @@ data Job = Job
 compile :: Job -> L1ExceptT ()
 compile job = do
   ast <- parseAST $ src job
+  liftIO $ writeFile (out job) (show ast)
+  liftIO $ appendFile (out job) "\n"
   semanticAnalysis ast
   let code = codeGen ast
-  liftIO $ writeFile (out job) (show code)
+  liftIO $ appendFile (out job) (show code)
   return ()

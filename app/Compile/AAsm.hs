@@ -61,13 +61,11 @@ genStmt (Decl name _) = do
   r <- freshReg
   emit $ Compile.AAAST.Init r $ Con "0"
   assignVar name r
-
 genStmt (Compile.AST.Init name e _) = do
   op <- genExpr e
   r <- freshReg
   emit $ Compile.AAAST.Init r op
   assignVar name r
-
 genStmt (Compile.AST.Asgn name (Just op) e _) = do
   rhs <- genExpr e
   r <- lookupVar name
@@ -79,13 +77,10 @@ genStmt (Compile.AST.Asgn name (Just op) e _) = do
       -- For simplicity, we'll use a base case that handles everything
       -- In a full maximum munch implementation, you would add specific pattern matches here
       emit $ Compile.AAAST.Asgn r op rhs
-
 genStmt (Compile.AST.Asgn name Nothing e _) = do
   rhs <- genExpr e
   r <- lookupVar name
   emit $ Compile.AAAST.Init r rhs
-
-
 genStmt (Compile.AST.Ret e _) = do
   -- Handle return statement (could be adapted based on your target language)
   -- For now, we'll just evaluate the expression
@@ -105,13 +100,14 @@ genExpr (UnExpr op e) = do
   -- For unary operations, we can use a dummy second operand (or adapt the AAAST to support unary ops)
   -- Using Con 0 as a placeholder, but this should be adapted to your needs
   case opnd of
-    Reg r ->
+    Reg r -> do
       emit $ UnOpAsgn r op
+      return $ Reg r
     Con i -> do
       r <- freshReg
       emit $ Compile.AAAST.Init r (Con i)
       emit $ UnOpAsgn r op
-  return opnd
+      return $ Reg r
 genExpr (BinExpr op e1 e2) = do
   opnd1 <- genExpr e1
   opnd2 <- genExpr e2

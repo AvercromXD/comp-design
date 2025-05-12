@@ -32,7 +32,7 @@ instance Show AAAST where
 instance Show Inst where
   show (Init dest op) = "Init: " ++ "R" ++ show dest ++ " <- " ++ show op
   show (Asgn dest op op1) = "Assign: " ++ "R" ++ show dest ++ " <- " ++ "R" ++ show dest ++ " " ++ show op ++ " " ++ show op1
-  show (UnOpAsgn dest op) = "UnOpAssign" ++ "R" ++ show dest ++ " <- " ++ show op ++ " " ++ "R" ++ show dest
+  show (UnOpAsgn dest op) = "UnOpAssign: " ++ "R" ++ show dest ++ " <- " ++ show op ++ " " ++ "R" ++ show dest
   show (Ret op1) = "Return " ++ show op1
 
 instance Show Operand where
