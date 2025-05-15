@@ -7,6 +7,7 @@ where
 import Compile.AAsm (codeGen)
 import Compile.Parser (parseAST)
 import Compile.Semantic (semanticAnalysis)
+import Compile.Liveness (tagLines, liveness)
 import Control.Monad.IO.Class
 import Error (L1ExceptT)
 
@@ -24,4 +25,10 @@ compile job = do
   semanticAnalysis ast
   let code = codeGen ast
   liftIO $ appendFile (out job) (show code)
+  let taggedLines = tagLines code
+  liftIO $ appendFile (out job) "\n"
+  liftIO $ appendFile (out job) (show taggedLines)
+  let live = liveness taggedLines
+  liftIO $ appendFile (out job) "\n"
+  liftIO $ appendFile (out job) (show live)
   return ()

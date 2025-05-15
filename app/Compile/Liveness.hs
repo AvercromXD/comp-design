@@ -1,9 +1,11 @@
+{-# LANGUAGE InstanceSigs #-}
 module Compile.Liveness where
 
 import Compile.AAAST (AAAST (..), Inst (..), Operand (..))
-import Control.Monad.State
+import Control.Monad.State (State, execState, gets, modify)
 import qualified Data.Map as Map
 import qualified Data.Set as HashSet
+import Control.Monad (filterM)
 
 type Register = Integer
 
@@ -29,24 +31,31 @@ data TaggedVariableLinesState = TaggedVariableLinesState
     live :: [LiveRegisters]
   }
 
+instance Show TaggedVariableLinesState where
+  show :: TaggedVariableLinesState -> String
+  show (TaggedVariableLinesState a s l) =
+    "TaggedVariableLinesState { \n array = " ++ show a ++ "\n succs = " ++ show s ++ "\n live = " ++ show l ++ " } \n"
+
 tagLines :: AAAST -> TaggedVariableLinesState
 tagLines (Block insts) = execState (tag insts) initialState
   where
     initialState = TaggedVariableLinesState [] [] [HashSet.empty | _ <- insts]
 
 liveness :: TaggedVariableLinesState -> [LiveRegisters]
-liveness state = live $ execState (mapM_ tagLive reverse [0..length live - 1]) state
+liveness state = live $ execState liveness' state
+  where
+    liveness' = do
+      liveList <- gets live
+      mapM_ (tagLive . fromIntegral) (reverse [0 .. length liveList - 1])
 
 tagLive :: Line -> TaggedVariableLines ()
 tagLive l = do
   liveSuccessors <- liveInSuccs l
-  mapM_ (`makeLive` l)  [x | x <- liveSuccessors, y <- (isDefined x line)]
-
-
-validRegistersInLine :: Line -> TaggedVariableLines [Register]
-validRegistersInLine = do
-  liveSuccessors <- liveInSuccs l
-  return [x | x <- liveSuccessors, x ]
+  defined <- filterM (\s -> fmap not (isDefined s l)) (HashSet.toList liveSuccessors)
+  mapM_ (`makeLive` l) defined
+  regs <- registersInLine l
+  used <- filterM (`isInUse` l) regs
+  mapM_ (`makeLive` l) used
 
 
 tag :: [Inst] -> TaggedVariableLines ()
@@ -65,35 +74,37 @@ isInUse :: Register -> Line -> TaggedVariableLines Bool
 isInUse r l = do
   a <- gets array
   let m = a !! fromIntegral l
-  let t = maybe False snd $ Map.lookup r m
+  let t = maybe False fst $ Map.lookup r m
   return t
 
 isDefined :: Register -> Line -> TaggedVariableLines Bool
 isDefined r l = do
   a <- gets array
   let m = a !! fromIntegral l
-  let t = maybe False fst $ Map.lookup r m
+  let t = maybe False snd $ Map.lookup r m
   return t
 
 liveInSucc :: [Line] -> TaggedVariableLines [Register]
-liveInSucc [] = []
+liveInSucc [] = return []
 liveInSucc (x:xs) = do
-  live <- gets live
-  hash <- live !! x
-  return [y | member hash y, y <- registersInLine x] ++ liveInSucc xs
+  liveR <- gets live
+  let hash = liveR !! fromIntegral x
+  rest <- liveInSucc xs
+  return (HashSet.toList hash ++ rest)
 
 
-liveInSuccs :: Line -> TaggedVariableLines [Register]
+liveInSuccs :: Line -> TaggedVariableLines (HashSet.Set Register)
 liveInSuccs l = do
-  succs <- gets succs
-  let succ = succs !! l
-  return liveInSucc succ
+  succs' <- gets succs
+  let succ' = succs' !! fromIntegral l
+  liveSuccs <- liveInSucc succ'
+  return (HashSet.fromList liveSuccs)
 
 registersInLine :: Line -> TaggedVariableLines [Register]
 registersInLine l = do
   a <- gets array
   let m = a !! fromIntegral l
-  return HashMap.keys m
+  return (Map.keys m)
 
 
 isLive :: Register -> Line -> TaggedVariableLines Bool
@@ -136,10 +147,11 @@ tagLine (Init r (Con _)) l = do
   let m = markAsDef r Map.empty
   updateState m (Just (l + 1))
 tagLine (Asgn r1 _ (Reg r2)) l = do
-  let m = handleRegOperand r1 r2 Map.empty
-  updateState m (Just (l + 1))
+  let m = markAsUse r2 Map.empty
+  let m1 = markAsUseDef r1 m
+  updateState m1 (Just (l + 1))
 tagLine (Asgn r _ (Con _)) l = do
-  let m = markAsDef r Map.empty
+  let m = markAsUseDef r Map.empty
   updateState m (Just (l + 1))
 tagLine (UnOpAsgn r _) l = do
   let m = handleRegOperand r r Map.empty
