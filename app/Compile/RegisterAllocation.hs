@@ -4,7 +4,7 @@ module RegisterAllocation
 where
 
 import Compile.AAAST (AAAST (Block), Inst (..), Operand (..))
-import Compile.GraphColoring (Edge, buildgraph, coloring)
+import Compile.GraphColoring (Edge, buildgraph, coloring, color)
 import Compile.Liveness (LiveRegisters, Register)
 import Control.Monad.State (State, execState, gets, modify)
 import qualified Data.HashSet as HS
@@ -30,20 +30,20 @@ data X86_64Register
   deriving (Eq, Ord)
 
 instance Show X86_64Register where
-  show Rax = "%rax"
-  show Rbx = "%rbx"
-  show Rcx = "%rcx"
-  show Rdx = "%rdx"
-  show Rsi = "%rsi"
-  show Rdi = "%rdi"
-  show R8 = "%r8"
-  show R9 = "%r9"
-  show R10 = "%r10"
-  show R11 = "%r11"
-  show R12 = "%r12"
-  show R13 = "%r13"
-  show R14 = "%r14"
-  show R15 = "%r15"
+  show Rax = "%eax"
+  show Rbx = "%ebx"
+  show Rcx = "%ecx"
+  show Rdx = "%edx"
+  show Rsi = "%esi"
+  show Rdi = "%edi"
+  show R8 = "%r8d"
+  show R9 = "%r9d"
+  show R10 = "%r10d"
+  show R11 = "%r11d"
+  show R12 = "%r12d"
+  show R13 = "%r13d"
+  show R14 = "%r14d"
+  show R15 = "%r15d"
   show Rsp = "%rsp"
   show (Spilled n) = error "Spilled register not supported in this context"
 
@@ -77,7 +77,7 @@ data CodeGenState = CodeGenState
 allocateRegisters :: AAAST -> [LiveRegisters] -> [String]
 allocateRegisters (Block inst) liveRegs = code $ execState (genBlock inst) initialState
   where
-    initialState = CodeGenState (colorVariables liveRegs) []
+    initialState = CodeGenState (colorVariables liveRegs) ["subq $" ++ show (Map.size (colorVariables liveRegs) * 4) ++ ", %rsp"]
 
 emit :: String -> CodeGen ()
 emit s = modify $ \s' -> s' {code = code s' ++ [s]}
@@ -95,13 +95,13 @@ lookupReg reg = do
 -- | Retrieve the value of temp register %r15 from the stack
 retrieveFromStack :: X86_64Register -> CodeGen ()
 retrieveFromStack (Spilled n) = do
-  emit $ "MOVL " ++ show n ++ show Rsp ++ ", " ++ show tempReg
+  emit $ "movl " ++ "[" ++ show Rsp ++ "+" ++ show n  ++ "]" ++ ", " ++ show tempReg
 retrieveFromStack _ = error "Not a spilled register"
 
 -- | Store the value of temp register %r15 to the stack
 storeToStack :: X86_64Register -> CodeGen ()
 storeToStack (Spilled n) = do
-  emit $ "MOVL " ++ show tempReg ++ ", " ++ show n ++ show Rsp
+  emit $ "movl " ++ show tempReg ++ ", [" ++ show Rsp ++ "+" ++ show n  ++ "]"
 storeToStack _ = error "Not a spilled register"
 
 isSpilled :: X86_64Register -> Bool
@@ -111,10 +111,10 @@ genInst :: Inst -> CodeGen ()
 genInst (Init dest (Reg src)) = do
   srcReg <- lookupReg src
   destReg <- lookupReg dest
-  emit $ "MOVL " ++ show srcReg ++ ", " ++ show destReg
+  emit $ "movl " ++ show srcReg ++ ", " ++ show destReg
 genInst (Init dest (Con src)) = do
   destReg <- lookupReg dest
-  emit $ "MOVL $" ++ src ++ ", " ++ show destReg
+  emit $ "movl $" ++ src ++ ", " ++ show destReg
 
 colorVariables :: [LiveRegisters] -> RegisterMap
 colorVariables liveRegs = convertColoringToRegisterMap $ coloring graph
