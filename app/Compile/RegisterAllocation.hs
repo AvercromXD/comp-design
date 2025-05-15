@@ -126,7 +126,7 @@ data CodeGenState = CodeGenState
 allocateRegisters :: AAAST -> [LiveRegisters] -> [String]
 allocateRegisters (Block inst) liveRegs = code $ execState (genBlock inst) initialState
   where
-    initialState = CodeGenState registerMap [show Sub ++ " " ++ makeImm (numSpilledRegisters registerMap * regSizeB) ++ ", " ++ show Rsp]
+    initialState = CodeGenState registerMap [show SUB ++ " " ++ makeImm (numSpilledRegisters registerMap * regSizeB) ++ ", " ++ show Rsp]
     registerMap = colorVariables liveRegs
 
 emit :: String -> CodeGen ()
