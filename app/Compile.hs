@@ -35,7 +35,7 @@ compile job = do
   let output = allocateRegisters code live
   starterCode <- liftIO $ readFile "res/starter_code"
   liftIO $ writeFile (out job) starterCode
-  liftIO $ appendFile (out job) intercalate "\n" (map show output)
+  liftIO $ appendFile (out job) (intercalate "\n" (map show output))
   -- liftIO $ appendFile (out job) "\n"
   -- liftIO $ appendFile (out job) (show live)
   return ()
