@@ -25,6 +25,7 @@ data X86_64Register
   | R13
   | R14
   | R15 -- Reserved for spilling
+  | Rsp -- Stack pointer
   | Spilled Int -- Spilled register
   deriving (Eq, Ord)
 
@@ -43,7 +44,8 @@ instance Show X86_64Register where
   show R13 = "%r13"
   show R14 = "%r14"
   show R15 = "%r15"
-  show (Spilled n) = "%spilled" ++ show n
+  show Rsp = "%rsp"
+  show (Spilled n) = error "Spilled register not supported in this context"
 
 usableRegisters :: [X86_64Register]
 usableRegisters =
@@ -59,6 +61,9 @@ usableRegisters =
     R13,
     R14
   ]
+
+tempReg :: X86_64Register
+tempReg = R15
 
 type RegisterMap = Map.Map Integer X86_64Register
 
@@ -87,14 +92,29 @@ lookupReg reg = do
     Just r -> return r
     Nothing -> error $ "Register " ++ show reg ++ " not found in register map"
 
+-- | Retrieve the value of temp register %r15 from the stack
+retrieveFromStack :: X86_64Register -> CodeGen ()
+retrieveFromStack (Spilled n) = do
+  emit $ "MOVL " ++ show n ++ show Rsp ++ ", " ++ show tempReg
+retrieveFromStack _ = error "Not a spilled register"
+
+-- | Store the value of temp register %r15 to the stack
+storeToStack :: X86_64Register -> CodeGen ()
+storeToStack (Spilled n) = do
+  emit $ "MOVL " ++ show tempReg ++ ", " ++ show n ++ show Rsp
+storeToStack _ = error "Not a spilled register"
+
+isSpilled :: X86_64Register -> Bool
+isSpilled (Spilled _) = True
+
 genInst :: Inst -> CodeGen ()
 genInst (Init dest (Reg src)) = do
   srcReg <- lookupReg src
   destReg <- lookupReg dest
-  emit $ "mov " ++ show srcReg ++ ", " ++ show destReg
+  emit $ "MOVL " ++ show srcReg ++ ", " ++ show destReg
 genInst (Init dest (Con src)) = do
   destReg <- lookupReg dest
-  emit $ "mov $" ++ src ++ ", " ++ show destReg
+  emit $ "MOVL $" ++ src ++ ", " ++ show destReg
 
 colorVariables :: [LiveRegisters] -> RegisterMap
 colorVariables liveRegs = convertColoringToRegisterMap $ coloring graph
