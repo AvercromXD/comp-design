@@ -4,7 +4,7 @@ module Compile.Liveness where
 import Compile.AAAST (AAAST (..), Inst (..), Operand (..))
 import Control.Monad.State (State, execState, gets, modify)
 import qualified Data.Map as Map
-import qualified Data.Set as HashSet
+import qualified Data.HashSet as HashSet
 import Control.Monad (filterM)
 
 type Register = Integer
@@ -21,7 +21,7 @@ type TagMap = Map.Map Integer (Use, Def)
 
 type Matrix = [TagMap]
 
-type LiveRegisters = HashSet.Set Register
+type LiveRegisters = HashSet.HashSet Register
 
 type TaggedVariableLines a = State TaggedVariableLinesState a
 
@@ -93,7 +93,7 @@ liveInSucc (x:xs) = do
   return (HashSet.toList hash ++ rest)
 
 
-liveInSuccs :: Line -> TaggedVariableLines (HashSet.Set Register)
+liveInSuccs :: Line -> TaggedVariableLines (HashSet.HashSet Register)
 liveInSuccs l = do
   succs' <- gets succs
   let succ' = succs' !! fromIntegral l
