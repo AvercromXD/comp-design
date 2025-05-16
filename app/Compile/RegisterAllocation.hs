@@ -189,73 +189,28 @@ isSpilled (Spilled _) = True
 isSpilled _ = False
 
 genInst :: Inst -> CodeGen ()
-genInst (Init dest (Reg src)) = do
-  srcReg <- loadSrcRegister src
-  destReg <- loadDstRegister dest
-  emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show destReg
-  storeRegister destReg
-genInst (Init dest (Con src)) = do
-  destReg <- loadDstRegister dest
-  emit $ show MOV ++ " " ++ makeImm src ++ ", " ++ show destReg
-  storeRegister destReg
-genInst (Asgn dest op (Reg src)) = do
-  srcReg <- loadSrcRegister src
-  destReg <- loadDstRegister dest
-  case op of
-    Compile.AST.Add -> do
-      emit $ show ADD ++ " " ++ show srcReg ++ ", " ++ show destReg
-      storeRegister destReg
-    Compile.AST.Sub -> do
-      emit $ show SUB ++ " " ++ show srcReg ++ ", " ++ show destReg
-      storeRegister destReg
-    Compile.AST.Mul -> do
-      emit $ show MUL ++ " " ++ show srcReg ++ ", " ++ show destReg
-      storeRegister destReg
-    Compile.AST.Div -> do
-      emit $ show MOV ++ " " ++ show destReg ++ ", " ++ show Rax
-      emit $ show CLTD
-      emit $ show DIV ++ " " ++ show srcReg
-      emit $ show MOV ++ " " ++ show Rax ++ ", " ++ show destReg
-      storeRegister destReg
-    Compile.AST.Mod -> do
-      emit $ show MOV ++ " " ++ show destReg ++ ", " ++ show Rax
-      emit $ show CLTD
-      emit $ show DIV ++ " " ++ show srcReg
-      emit $ show MOV ++ " " ++ show Rdx ++ ", " ++ show destReg
-      storeRegister destReg
-    _ -> error "Unsupported operation"
-genInst (Asgn dest op (Con src)) = do
-  destReg <- loadDstRegister dest
-  case op of
-    Compile.AST.Add -> do
-      emit $ show ADD ++ " " ++ makeImm src ++ ", " ++ show destReg
-      storeRegister destReg
-    Compile.AST.Sub -> do
-      emit $ show SUB ++ " " ++ makeImm src ++ ", " ++ show destReg
-      storeRegister destReg
-    Compile.AST.Mul -> do
-      emit $ show MUL ++ " " ++ makeImm src ++ ", " ++ show destReg
-      storeRegister destReg
-    Compile.AST.Div -> do
-      emit $ show MOV ++ " " ++ show destReg ++ ", " ++ show Rax
-      emit $ show CLTD
-      emit $ show DIV ++ " " ++ makeImm src
-      emit $ show MOV ++ " " ++ show Rax ++ ", " ++ show destReg
-      storeRegister destReg
-    Compile.AST.Mod -> do
-      emit $ show MOV ++ " " ++ show destReg ++ ", " ++ show Rax
-      emit $ show CLTD
-      emit $ show DIV ++ " " ++ makeImm src
-      emit $ show MOV ++ " " ++ show Rdx ++ ", " ++ show destReg
-      storeRegister destReg
-    _ -> error "Unsupported operation"
-genInst (UnOpAsgn dest op) = do
-  destReg <- loadDstRegister dest
-  case op of
-    Compile.AST.Neg -> do
-      emit $ show NEG ++ " " ++ show destReg
-      storeRegister destReg
-    _ -> error "Unsupported operation"
+genInst (Init dest (Reg src)) = binOp MOV src dest
+genInst (Init dest (Con src)) = immOp MOV src dest
+genInst (Asgn dest op (Reg src)) = case op of
+  Compile.AST.Add -> binOp ADD src dest
+  Compile.AST.Sub -> binOp SUB src dest
+  Compile.AST.Mul -> binOp MUL src dest
+  Compile.AST.Div -> divModOp DivResult src dest
+  Compile.AST.Mod -> divModOp ModResult src dest
+  _ -> error "Unsupported operation"
+genInst (Asgn dest op (Con src)) = case op of
+  Compile.AST.Add -> immOp ADD src dest
+  Compile.AST.Sub -> immOp SUB src dest
+  Compile.AST.Mul -> immOp MUL src dest
+  Compile.AST.Div -> immDivModOp DivResult src dest
+  Compile.AST.Mod -> immDivModOp ModResult src dest
+  _ -> error "Unsupported operation"
+genInst (UnOpAsgn dest op) = case op of
+  Compile.AST.Neg -> do
+    destReg <- loadDstRegister dest
+    emit $ show NEG ++ " " ++ show destReg
+    storeRegister destReg
+  _ -> error "Unsupported operation"
 genInst (Ret (Reg src)) = do
   srcReg <- loadSrcRegister src
   emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show Rax
@@ -263,6 +218,41 @@ genInst (Ret (Reg src)) = do
 genInst (Ret (Con src)) = do
   emit $ show MOV ++ " " ++ makeImm src ++ ", " ++ show Rax
   emit $ show RET
+
+-- Result type for division/modulo
+data DivModResult = DivResult | ModResult
+
+binOp :: Operations -> Register -> Register -> CodeGen ()
+binOp op src dest = do
+  srcReg <- loadSrcRegister src
+  destReg <- loadDstRegister dest
+  emit $ show op ++ " " ++ show srcReg ++ ", " ++ show destReg
+  storeRegister destReg
+
+divModOp :: DivModResult -> Register -> Register -> CodeGen ()
+divModOp resultType src dest = do
+  destReg <- loadDstRegister dest
+  srcReg <- loadSrcRegister src
+  emit $ show MOV ++ " " ++ show destReg ++ ", " ++ show Rax
+  emit $ show CLTD
+  emit $ show DIV ++ " " ++ show srcReg
+  emit $ show MOV ++ " " ++ show (case resultType of DivResult -> Rax; ModResult -> Rdx) ++ ", " ++ show destReg
+  storeRegister destReg
+
+immDivModOp :: DivModResult -> String -> Register -> CodeGen ()
+immDivModOp resultType imm dest = do
+  destReg <- loadDstRegister dest
+  emit $ show MOV ++ " " ++ show destReg ++ ", " ++ show Rax
+  emit $ show CLTD
+  emit $ show DIV ++ " " ++ makeImm imm
+  emit $ show MOV ++ " " ++ show (case resultType of DivResult -> Rax; ModResult -> Rdx) ++ ", " ++ show destReg
+  storeRegister destReg
+
+immOp :: Operations -> String -> Register -> CodeGen ()
+immOp op imm dest = do
+  destReg <- loadDstRegister dest
+  emit $ show op ++ " " ++ makeImm imm ++ ", " ++ show destReg
+  storeRegister destReg
 
 colorVariables :: [LiveRegisters] -> RegisterMap
 colorVariables liveRegs = convertColoringToRegisterMap $ coloring graph
