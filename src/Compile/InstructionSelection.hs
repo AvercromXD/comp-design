@@ -103,15 +103,10 @@ genExpr (UnExpr op e) = do
   opnd <- genExpr e
   -- For unary operations, we can use a dummy second operand (or adapt the AAAST to support unary ops)
   -- Using Con 0 as a placeholder, but this should be adapted to your needs
-  case opnd of
-    Reg r -> do
-      emit $ UnOpAsgn r op
-      return $ Reg r
-    Con i -> do
-      r <- freshReg
-      emit $ Compile.AAAST.Init r (Con i)
-      emit $ UnOpAsgn r op
-      return $ Reg r
+  r <- freshReg
+  emit $ Compile.AAAST.Init r opnd
+  emit $ UnOpAsgn r op
+  return $ Reg r
 genExpr (BinExpr op e1 e2) = do
   opnd1 <- genExpr e1
   opnd2 <- genExpr e2

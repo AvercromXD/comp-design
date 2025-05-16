@@ -224,18 +224,30 @@ genInst (UnOpAsgn dest op) = case op of
   _ -> error "Unsupported operation"
 genInst (Ret (Reg src)) = do
   m <- gets regMap
+  let hasSpilledRegisters = numSpilledRegisters m > 0
   srcReg <- loadSrcRegister src
-  emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show Rax
-  let stackSize = (numSpilledRegisters m + 1) * regSizeB
-  emit $ show ADD ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
-  emit $ show RET
+  if hasSpilledRegisters
+  then do
+    emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show Rax
+    let stackSize = (numSpilledRegisters m + 1) * regSizeB
+    emit $ show ADD ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
+    emit $ show RET
+  else do 
+    emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show Rax
+    emit $ show RET
   
 genInst (Ret (Con src)) = do
   m <- gets regMap
-  emit $ show MOV ++ " " ++ makeImm src ++ ", " ++ show Rax
-  let stackSize = (numSpilledRegisters m + 1) * regSizeB
-  emit $ show ADD ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
-  emit $ show RET
+  let hasSpilledRegisters = numSpilledRegisters m > 0
+  if hasSpilledRegisters
+  then do
+      emit $ show MOV ++ " " ++ makeImm src ++ ", " ++ show Rax
+      let stackSize = (numSpilledRegisters m + 1) * regSizeB
+      emit $ show ADD ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
+      emit $ show RET
+  else do
+      emit $ show MOV ++ " " ++ makeImm src ++ ", " ++ show Rax
+      emit $ show RET 
 
 -- Result type for division/modulo
 data DivModResult = DivResult | ModResult

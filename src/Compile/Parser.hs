@@ -11,6 +11,7 @@ import           Control.Monad.IO.Class (liftIO)
 import           Data.Functor (void)
 import           Data.Void (Void)
 import           Data.Int (Int32)
+import           Data.Char (toLower)
 import           Numeric (showHex)
 
 import           Text.Megaparsec
@@ -162,7 +163,7 @@ decLiteral = string "0" <|> (:) <$> oneOf ['1'..'9'] <*> many digitChar
 
 hexLiteral :: Parser String
 hexLiteral = do
-  void $ chunk "0x"
+  void $ chunkCI "0x"
   digits <- some hexDigitChar
   return ("0x" ++ digits)
 
@@ -182,7 +183,7 @@ decimal = do
 
 hexadecimal :: Parser Integer
 hexadecimal = do
-  void $ chunk "0x"
+  void $ chunkCI "0x"
   n <- lexeme L.hexadecimal
   if n > maxHex
     then fail $ "Hexadecimal literal out of bounds: " ++ "0x" ++ showHex n ""
@@ -216,6 +217,13 @@ reservedWords =
   , "void"
   , "while"
   ]
+
+-- Case-insensitive parser
+chunkCI :: String -> Parser String
+chunkCI = traverse charCI
+
+charCI :: Char -> Parser Char
+charCI c = satisfy (\x -> toLower x == toLower c) <?> show [c]
 
 -- Operations
 opStart :: Parser Char

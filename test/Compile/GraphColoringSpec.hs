@@ -2,6 +2,7 @@ module Compile.GraphColoringSpec where
 
 import Compile.GraphColoring
 import Test.Hspec
+import qualified Data.Map as Map
 
 spec :: Spec
 spec = do

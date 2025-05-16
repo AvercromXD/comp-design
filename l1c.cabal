@@ -61,6 +61,7 @@ test-suite l1c-test
                   base >= 4.15 && < 5,
                   hspec,
                   hspec-discover,
-                  l1c
+                  l1c,
+                  containers
     hs-source-dirs:   test
     default-language: Haskell2010
