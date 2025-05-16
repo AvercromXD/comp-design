@@ -38,5 +38,6 @@ compile job = do
   liftIO $ writeFile (out job) starterCode
   liftIO $ appendFile (out job) "\n"
   liftIO $ appendFile (out job) (intercalate "\n" output)
+  liftIO $ appendFile (out job) "\n"
 
   return ()
