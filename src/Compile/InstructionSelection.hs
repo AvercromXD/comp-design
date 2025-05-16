@@ -4,7 +4,7 @@ module Compile.InstructionSelection
 where
 
 import Compile.AAAST (AAAST (..), Inst (..), Operand (..))
-import Compile.AST (AST (..), Expr (..), Stmt (..))
+import Compile.AST (AST (..), Expr (..), Stmt (..), Op (..))
 import Control.Monad.State
 import qualified Data.Map as Map
 
@@ -116,6 +116,18 @@ genExpr (BinExpr op e1 e2) = do
   -- Maximum munch for binary operations
   -- Here we can add specific patterns for optimal instruction selection
   -- For now, we'll use a general case
+
   emit $ Compile.AAAST.Init r opnd1
-  emit $ Compile.AAAST.Asgn r op opnd2
+  -- case mod or div, has to store constants in a register first
+  case (op, opnd2) of
+    (Compile.AST.Mod, Con _) -> do
+      r2 <- freshReg
+      emit $ Compile.AAAST.Init r2 opnd2
+      emit $ Compile.AAAST.Asgn r op (Reg r2)
+    (Compile.AST.Div, Con _) -> do
+      r2 <- freshReg
+      emit $ Compile.AAAST.Init r2 opnd2
+      emit $ Compile.AAAST.Asgn r op (Reg r2)
+    (_, _) -> do
+      emit $ Compile.AAAST.Asgn r op opnd2
   return $ Reg r

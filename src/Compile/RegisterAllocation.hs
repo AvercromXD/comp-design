@@ -56,7 +56,7 @@ instance Show X86_64Register where
 
 -- | Size of registers in bytes
 regSizeB :: Int
-regSizeB = 4
+regSizeB = 8
 
 usableRegisters :: [X86_64Register]
 usableRegisters =
