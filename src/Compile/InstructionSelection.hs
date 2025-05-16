@@ -69,14 +69,18 @@ genStmt (Compile.AST.Init name e _) = do
 genStmt (Compile.AST.Asgn name (Just op) e _) = do
   rhs <- genExpr e
   r <- lookupVar name
-
-  -- Maximum munch for assignment
-  case (r, rhs) of
-    -- When both sides are operands, emit a direct assignment
-    (_, _) ->
-      -- For simplicity, we'll use a base case that handles everything
-      -- In a full maximum munch implementation, you would add specific pattern matches here
+  case (op, rhs) of
+    (Compile.AST.Mod, Con _) -> do
+      r2 <- freshReg
+      emit $ Compile.AAAST.Init r2 rhs
+      emit $ Compile.AAAST.Asgn r op (Reg r2)
+    (Compile.AST.Div, Con _) -> do
+      r2 <- freshReg
+      emit $ Compile.AAAST.Init r2 rhs
+      emit $ Compile.AAAST.Asgn r op (Reg r2)
+    (_, _) -> do
       emit $ Compile.AAAST.Asgn r op rhs
+  
 genStmt (Compile.AST.Asgn name Nothing e _) = do
   rhs <- genExpr e
   r <- lookupVar name

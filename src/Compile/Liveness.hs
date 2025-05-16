@@ -128,7 +128,11 @@ updateAt n newValue (x:xs) = x : updateAt (n-1) newValue xs
 updateState :: TagMap -> Maybe Line -> TaggedVariableLines ()
 updateState m (Just l) = do
   modify $ \s -> s {array = array s ++ [m]}
-  modify $ \s -> s {succs = succs s ++ [[l]]}
+  len <- gets (length . live)
+  if l >= fromIntegral len then do
+    modify $ \s -> s {succs = succs s ++ [[]]}
+  else do 
+    modify $ \s -> s {succs = succs s ++ [[l]]}
 updateState m Nothing = do
   modify $ \s -> s {array = array s ++ [m]}
   modify $ \s -> s {succs = succs s ++ [[]]}

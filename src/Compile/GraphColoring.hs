@@ -32,7 +32,7 @@ buildgraph v e =
   let e' = List.union e (map (\(x, y) -> (y, x)) e) -- union edges with their reverse
       e'' = map (\n -> filter (\(x, _) -> x == n) e') v -- [[(0,1),(0,2)], [(1,0),(1,2)], [(2,0),(2,1)]]
       e''' = map (map snd) e'' --
-   in Map.fromList (tabulate (\x -> (x, e''' !! x)) (length e'''))
+   in Map.fromList (tabulate (\x -> (v !! x, e''' !! x)) (length e'''))
 
 -- maxV : Returns the max numbered vertex in of an Edge
 maxV :: Edge -> Vertex
@@ -55,7 +55,7 @@ isnghbr g v1 v2 = v2 `elem` nghbr g v1
 -- Simplicial Elimination Ordering
 seo :: Graph -> [Vertex]
 seo g =
-  let verts = tabulate id (Map.size g)
+  let verts = Map.keys g
       weights = PQ.fromAscList (map (\x -> (0, x)) verts)
    in List.reverse (seo' g weights [])
 
