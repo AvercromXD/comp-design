@@ -110,8 +110,8 @@ srcSpillReg = R14
 dstSpillReg :: X86_64Register
 dstSpillReg = R15
 
-makeImm :: (Show a) => a -> String
-makeImm n = "$" ++ show n
+makeImm :: String -> String
+makeImm n = "$" ++ n
 
 type RegisterMap = Map.Map Integer X86_64Register
 
@@ -123,10 +123,16 @@ data CodeGenState = CodeGenState
   }
 
 allocateRegisters :: AAAST -> [LiveRegisters] -> [String]
-allocateRegisters (Block inst) liveRegs = code $ execState (genBlock inst) initialState
+allocateRegisters (Block inst) liveRegs = code $ execState (genBlock (filter (`filterLiveInsts` registerMap) inst)) initialState
   where
-    initialState = CodeGenState registerMap [show SUB ++ " " ++ makeImm (numSpilledRegisters registerMap * regSizeB) ++ ", " ++ show Rsp]
+    initialState = CodeGenState registerMap [show SUB ++ " " ++ makeImm (show (numSpilledRegisters registerMap * regSizeB)) ++ ", " ++ show Rsp]
     registerMap = colorVariables liveRegs
+
+filterLiveInsts :: Inst -> RegisterMap -> Bool
+filterLiveInsts (Init d _) m = Map.member d m
+filterLiveInsts (Asgn d _ _) m = Map.member d m
+filterLiveInsts (UnOpAsgn d _) m = Map.member d m
+filterLiveInsts (Ret _) _ = True
 
 emit :: String -> CodeGen ()
 emit s = modify $ \s' -> s' {code = code s' ++ [s]}
@@ -154,7 +160,7 @@ retrieveFromStack Dst (Spilled n) = do
 retrieveFromStack _ _ = error "Not a spilled register"
 
 -- | Store the value of temp register %r14/%r15 to the stack
--- mov %r15, (n+1)*regSizeB(%rsp)
+-- mov %r15/%r15, (n+1)*regSizeB(%rsp)
 storeToStack :: X86_64Register -> CodeGen ()
 storeToStack (Spilled n) = do
   emit $ show MOV ++ " " ++ show dstSpillReg ++ ", " ++ show ((n + 1) * regSizeB) ++ "(" ++ show Rsp ++ ")"

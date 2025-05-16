@@ -5,14 +5,13 @@ module Compile
 where
 
 import Compile.InstructionSelection (codeGen)
+import Compile.Liveness (liveness, tagLines)
 import Compile.Parser (parseAST)
+import Compile.RegisterAllocation (allocateRegisters)
 import Compile.Semantic (semanticAnalysis)
-import Compile.Liveness (tagLines, liveness)
-import Compile.RegisterAllocation(allocateRegisters)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Error (L1ExceptT)
 import Data.List (intercalate)
-
+import Error (L1ExceptT)
 
 data Job = Job
   { src :: FilePath,
@@ -33,9 +32,11 @@ compile job = do
   -- liftIO $ appendFile (out job) (show taggedLines)
   let live = liveness taggedLines
   let output = allocateRegisters code live
-  starterCode <- liftIO $ readFile "res/starter_code"
-  liftIO $ writeFile (out job) starterCode
-  liftIO $ appendFile (out job) (intercalate "\n" (map show output))
   -- liftIO $ appendFile (out job) "\n"
   -- liftIO $ appendFile (out job) (show live)
+  starterCode <- liftIO $ readFile "res/starter_code"
+  liftIO $ writeFile (out job) starterCode
+  liftIO $ appendFile (out job) "\n"
+  liftIO $ appendFile (out job) (intercalate "\n" output)
+
   return ()

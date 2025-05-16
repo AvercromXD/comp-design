@@ -1,0 +1,91 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use tuple-section" #-}
+module Compile.GraphColoring where
+
+{-data color = Color Int
+           | Clear deriving Show
+data vertex = Vertex Int color deriving Show
+data edge = Edge vertex vertex deriving Show
+data graph = Graph vertex [edges] deriving Show-}
+
+import qualified Data.Heap as PQ
+import qualified Data.List as List
+import qualified Data.Map as Map
+
+type Vertex = Int
+
+type Edge = (Vertex, Vertex)
+
+type Edges = [Edge]
+
+type Graph = Map.Map Vertex [Vertex]
+
+{-
+Graph - function from Vertex to list of Vertices.
+buildgraph, takes in list of vertices, and list of edges and builds graph
+list of edges may contain both (1,2) and (2,1) for an edge
+-}
+
+buildgraph :: [Vertex] -> Edges -> Graph
+buildgraph v e =
+  let e' = List.union e (map (\(x, y) -> (y, x)) e) -- union edges with their reverse
+      e'' = map (\n -> filter (\(x, _) -> x == n) e') v -- [[(0,1),(0,2)], [(1,0),(1,2)], [(2,0),(2,1)]]
+      e''' = map (map snd) e'' --
+   in Map.fromList (tabulate (\x -> (x, e''' !! x)) (length e'''))
+
+-- maxV : Returns the max numbered vertex in of an Edge
+maxV :: Edge -> Vertex
+maxV (x, y) = max x y
+
+-- tabulate : creates a list of length n applying f to each index, given a
+--            function f and integer n
+tabulate :: (Int -> a) -> Int -> [a]
+tabulate f n = map f [0 .. (n - 1)]
+
+-- nghbr : Given a graph and a vertex, return a list of the neighboring vertices
+nghbr :: Graph -> Vertex -> [Vertex]
+nghbr g v = g Map.! v
+
+-- in if Mb.isJust l then Mb.fromJust l else []
+
+isnghbr :: Graph -> Vertex -> Vertex -> Bool
+isnghbr g v1 v2 = v2 `elem` nghbr g v1
+
+-- Simplicial Elimination Ordering
+seo :: Graph -> [Vertex]
+seo g =
+  let verts = tabulate id (Map.size g)
+      weights = PQ.fromAscList (map (\x -> (0, x)) verts)
+   in List.reverse (seo' g weights [])
+
+seo' :: Graph -> PQ.MaxHeap (Vertex, Vertex) -> [Vertex] -> [Vertex]
+seo' g weights l =
+  case PQ.view weights of
+    Nothing -> l
+    Just ((_, v), weights') ->
+      let (left, right) = PQ.partition (\(_, v') -> isnghbr g v v' {- is neighbor of v -}) weights'
+          left' = PQ.fromList (map (\(prio, val) -> (prio + 1, val)) (PQ.toList left))
+          w = PQ.union left' right
+       in seo' g w (v : l)
+
+-- Greedy coloring algorithm, takes a graph, outputs a list of tuples
+-- Vertex paired with Int, which represents color
+coloring :: Graph -> [(Vertex, Int)]
+coloring g =
+  let m = Map.map (\_x -> -1) g
+      s = seo g
+   in color g m s
+
+color :: Graph -> Map.Map Vertex Int -> [Vertex] -> [(Vertex, Int)]
+color _ m [] = Map.toAscList m
+color g m s =
+  let n = nghbr g (List.head s)
+      n' = List.map (m Map.!) n
+      m' = Map.insert (List.head s) (mex n') m
+   in color g m' (tail s)
+
+-- Finds the Minimally Excluded Element of a list
+mex :: [Int] -> Int
+mex [] = 0
+mex l = List.minimum ([0 .. (List.maximum l + 2)] List.\\ l)

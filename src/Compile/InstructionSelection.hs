@@ -7,7 +7,6 @@ import Compile.AAAST (AAAST (..), Inst (..), Operand (..))
 import Compile.AST (AST (..), Expr (..), Stmt (..))
 import Control.Monad.State
 import qualified Data.Map as Map
-import qualified Data.Set as HashSet
 
 type VarName = String
 
@@ -20,7 +19,6 @@ type CodeGen a = State CodeGenState a
 data CodeGenState = CodeGenState
   { regMap :: RegisterMap,
     nextReg :: Register,
-    asgnVar :: HashSet.Set VarName,
     code :: [Inst]
   }
 
@@ -28,7 +26,7 @@ data CodeGenState = CodeGenState
 codeGen :: AST -> AAAST
 codeGen (Compile.AST.Block stmts _) = Compile.AAAST.Block $ code $ execState (genBlock stmts) initialState
   where
-    initialState = CodeGenState Map.empty 0 HashSet.empty []
+    initialState = CodeGenState Map.empty 0 []
 
 -- | Generate a fresh register
 freshReg :: CodeGen Register
@@ -37,20 +35,6 @@ freshReg = do
   let r = nextReg curr
   put curr {nextReg = r + 1}
   return r
-
--- | Mark a variable as assigned
-nameAssign :: VarName -> CodeGen ()
-nameAssign r = do
-  curr <- get
-  let asgn = asgnVar curr
-  put curr {asgnVar = HashSet.insert r asgn}
-
--- | Check if a variable was assigned
-wasAssigned :: VarName -> CodeGen Bool
-wasAssigned r = do
-  curr <- get
-  let asgn = asgnVar curr
-  return $ HashSet.member r asgn
 
 -- | Assign a register to a variable
 assignVar :: VarName -> Register -> CodeGen ()
@@ -67,18 +51,6 @@ lookupVar name = do
 emit :: Inst -> CodeGen ()
 emit inst = modify $ \s -> s {code = code s ++ [inst]}
 
-getVarReg :: VarName -> CodeGen Register
-getVarReg name = do
-  was <- wasAssigned name
-  if was then do
-    r <- freshReg
-    assignVar name r
-    return r
-  else do
-    r <- lookupVar name
-    nameAssign name
-    return r
-
 -- | Process a block of statements
 genBlock :: [Stmt] -> CodeGen ()
 genBlock = mapM_ genStmt
@@ -94,10 +66,9 @@ genStmt (Compile.AST.Init name e _) = do
   r <- freshReg
   emit $ Compile.AAAST.Init r op
   assignVar name r
-  nameAssign name
 genStmt (Compile.AST.Asgn name (Just op) e _) = do
   rhs <- genExpr e
-  r <- getVarReg name
+  r <- lookupVar name
 
   -- Maximum munch for assignment
   case (r, rhs) of
@@ -108,7 +79,7 @@ genStmt (Compile.AST.Asgn name (Just op) e _) = do
       emit $ Compile.AAAST.Asgn r op rhs
 genStmt (Compile.AST.Asgn name Nothing e _) = do
   rhs <- genExpr e
-  r <- getVarReg name
+  r <- lookupVar name
   emit $ Compile.AAAST.Init r rhs
 genStmt (Compile.AST.Ret e _) = do
   -- Handle return statement (could be adapted based on your target language)
@@ -134,19 +105,17 @@ genExpr (UnExpr op e) = do
       return $ Reg r
     Con i -> do
       r <- freshReg
-      r2 <- freshReg
       emit $ Compile.AAAST.Init r (Con i)
-      emit $ UnOpAsgn r2 op
-      return $ Reg r2
+      emit $ UnOpAsgn r op
+      return $ Reg r
 genExpr (BinExpr op e1 e2) = do
   opnd1 <- genExpr e1
   opnd2 <- genExpr e2
   r <- freshReg
-  r2 <- freshReg
 
   -- Maximum munch for binary operations
   -- Here we can add specific patterns for optimal instruction selection
   -- For now, we'll use a general case
   emit $ Compile.AAAST.Init r opnd1
-  emit $ Compile.AAAST.Asgn r2 op opnd2
-  return $ Reg r2
+  emit $ Compile.AAAST.Asgn r op opnd2
+  return $ Reg r
