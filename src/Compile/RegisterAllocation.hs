@@ -3,6 +3,8 @@
 
 module Compile.RegisterAllocation
   ( allocateRegisters,
+    colorVariables,
+    usableFromIdx,
   )
 where
 
@@ -71,6 +73,12 @@ usableRegisters =
     R12,
     R13
   ]
+
+usableFromIdx :: (Integral a, Num a) => a -> X86_64Register
+usableFromIdx n =
+  if fromIntegral n < length usableRegisters
+    then usableRegisters !! fromIntegral n
+    else Spilled (fromIntegral n - length usableRegisters)
 
 data Operations
   = ADD -- add S, D Add source to destination
@@ -188,11 +196,11 @@ loadDstRegister n = do
 storeRegister :: Register -> CodeGen ()
 storeRegister n = do
   dstReg <- lookupReg n
-  case dstReg of 
+  case dstReg of
     Spilled s -> do
       storeToStack (Spilled s)
       return ()
-    _ -> do 
+    _ -> do
       return ()
 
 isSpilled :: X86_64Register -> Bool
@@ -227,27 +235,26 @@ genInst (Ret (Reg src)) = do
   let hasSpilledRegisters = numSpilledRegisters m > 0
   srcReg <- loadSrcRegister src
   if hasSpilledRegisters
-  then do
-    emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show Rax
-    let stackSize = (numSpilledRegisters m + 1) * regSizeB
-    emit $ show ADD ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
-    emit $ show RET
-  else do 
-    emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show Rax
-    emit $ show RET
-  
+    then do
+      emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show Rax
+      let stackSize = (numSpilledRegisters m + 1) * regSizeB
+      emit $ show ADD ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
+      emit $ show RET
+    else do
+      emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show Rax
+      emit $ show RET
 genInst (Ret (Con src)) = do
   m <- gets regMap
   let hasSpilledRegisters = numSpilledRegisters m > 0
   if hasSpilledRegisters
-  then do
+    then do
       emit $ show MOV ++ " " ++ makeImm src ++ ", " ++ show Rax
       let stackSize = (numSpilledRegisters m + 1) * regSizeB
       emit $ show ADD ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
       emit $ show RET
-  else do
+    else do
       emit $ show MOV ++ " " ++ makeImm src ++ ", " ++ show Rax
-      emit $ show RET 
+      emit $ show RET
 
 -- Result type for division/modulo
 data DivModResult = DivResult | ModResult
