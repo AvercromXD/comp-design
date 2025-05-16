@@ -26,7 +26,7 @@ compile job = do
   --liftIO $ appendFile (out job) "\n"
   semanticAnalysis ast
   let code = codeGen ast
-  --liftIO $ appendFile (out job) (show code)
+  liftIO $ appendFile (out job) (show code)
   let taggedLines = tagLines code
   -- liftIO $ appendFile (out job) "\n"
   -- liftIO $ appendFile (out job) (show taggedLines)

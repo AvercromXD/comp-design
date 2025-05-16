@@ -102,7 +102,7 @@ instance Show Operations where
   show PUSH = "pushq"
   show POP = "popq"
   show RET = "ret"
-  show CLTD = "cltd"
+  show CLTD = "cqo"
 
 srcSpillReg :: X86_64Register
 srcSpillReg = R14
@@ -126,7 +126,7 @@ allocateRegisters :: AAAST -> [LiveRegisters] -> [String]
 allocateRegisters (Block inst) liveRegs = code $ execState (genBlock (filter (`filterLiveInsts` registerMap) inst)) initialState
   where
     initialState
-      | numSpilledRegisters registerMap /= 0 = CodeGenState registerMap [show SUB ++ " " ++ makeImm (show (numSpilledRegisters registerMap * regSizeB)) ++ ", " ++ show Rsp]
+      | numSpilledRegisters registerMap /= 0 = CodeGenState registerMap [show SUB ++ " " ++ makeImm (show ((numSpilledRegisters registerMap + 1) * regSizeB)) ++ ", " ++ show Rsp]
       | otherwise = CodeGenState registerMap []
     registerMap = colorVariables liveRegs
 
@@ -181,16 +181,19 @@ loadDstRegister :: Register -> CodeGen X86_64Register
 loadDstRegister n = do
   destReg <- lookupReg n
   case destReg of
-    Spilled s -> do
-      retrieveFromStack Dst (Spilled s)
+    Spilled _ -> do
       return dstSpillReg
     _ -> return destReg
 
-storeRegister :: X86_64Register -> CodeGen ()
-storeRegister (Spilled s) = do
-  storeToStack (Spilled s)
-  return ()
-storeRegister _ = return ()
+storeRegister :: Register -> CodeGen ()
+storeRegister n = do
+  dstReg <- lookupReg n
+  case dstReg of 
+    Spilled s -> do
+      storeToStack (Spilled s)
+      return ()
+    _ -> do 
+      return ()
 
 isSpilled :: X86_64Register -> Bool
 isSpilled (Spilled _) = True
@@ -217,14 +220,21 @@ genInst (UnOpAsgn dest op) = case op of
   Compile.AST.Neg -> do
     destReg <- loadDstRegister dest
     emit $ show NEG ++ " " ++ show destReg
-    storeRegister destReg
+    storeRegister dest
   _ -> error "Unsupported operation"
 genInst (Ret (Reg src)) = do
+  m <- gets regMap
   srcReg <- loadSrcRegister src
   emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show Rax
+  let stackSize = (numSpilledRegisters m + 1) * regSizeB
+  emit $ show ADD ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
   emit $ show RET
+  
 genInst (Ret (Con src)) = do
+  m <- gets regMap
   emit $ show MOV ++ " " ++ makeImm src ++ ", " ++ show Rax
+  let stackSize = (numSpilledRegisters m + 1) * regSizeB
+  emit $ show ADD ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
   emit $ show RET
 
 -- Result type for division/modulo
@@ -235,7 +245,7 @@ binOp op src dest = do
   srcReg <- loadSrcRegister src
   destReg <- loadDstRegister dest
   emit $ show op ++ " " ++ show srcReg ++ ", " ++ show destReg
-  storeRegister destReg
+  storeRegister dest
 
 divModOp :: DivModResult -> Register -> Register -> CodeGen ()
 divModOp resultType src dest = do
@@ -245,7 +255,7 @@ divModOp resultType src dest = do
   emit $ show CLTD
   emit $ show DIV ++ " " ++ show srcReg
   emit $ show MOV ++ " " ++ show (case resultType of DivResult -> Rax; ModResult -> Rdx) ++ ", " ++ show destReg
-  storeRegister destReg
+  storeRegister dest
 
 immDivModOp :: DivModResult -> String -> Register -> CodeGen ()
 immDivModOp resultType imm dest = do
@@ -254,13 +264,13 @@ immDivModOp resultType imm dest = do
   emit $ show CLTD
   emit $ show DIV ++ " " ++ makeImm imm
   emit $ show MOV ++ " " ++ show (case resultType of DivResult -> Rax; ModResult -> Rdx) ++ ", " ++ show destReg
-  storeRegister destReg
+  storeRegister dest
 
 immOp :: Operations -> String -> Register -> CodeGen ()
 immOp op imm dest = do
   destReg <- loadDstRegister dest
   emit $ show op ++ " " ++ makeImm imm ++ ", " ++ show destReg
-  storeRegister destReg
+  storeRegister dest
 
 colorVariables :: [LiveRegisters] -> RegisterMap
 colorVariables liveRegs = convertColoringToRegisterMap $ coloring graph
