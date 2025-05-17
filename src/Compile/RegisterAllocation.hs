@@ -52,7 +52,7 @@ instance Show X86_64Register where
   show R13 = "%r13d"
   show R14 = "%r14d"
   show R15 = "%r15d"
-  show Rsp = "%esp"
+  show Rsp = "%rsp"
   show Rbp = "%ebp"
   show (Spilled _) = error "Spilled register not supported in this context"
 
@@ -82,7 +82,9 @@ usableFromIdx n =
 
 data Operations
   = ADD -- add S, D Add source to destination
+  | ADDQ -- addq S, D Add source to destination (64-bit)
   | SUB -- sub S, D Subtract source from destination
+  | SUBQ -- subq S, D Subtract source from destination (64-bit)
   | MUL -- mul S, D Multiply source with destination
   | DIV -- div S, D Divide source by destination, quotient in Rax, remainder in Rdx
   | NEG -- neg D Negate destination
@@ -102,7 +104,9 @@ data Direction
 instance Show Operations where
   show :: Operations -> String
   show ADD = "addl"
+  show ADDQ = "addq"
   show SUB = "subl"
+  show SUBQ = "subq"
   show MUL = "imull"
   show DIV = "idivl"
   show NEG = "negl"
@@ -134,7 +138,7 @@ allocateRegisters :: AAAST -> [LiveRegisters] -> [String]
 allocateRegisters (Block inst) liveRegs = code $ execState (genBlock (filter (`filterLiveInsts` registerMap) inst)) initialState
   where
     initialState
-      | numSpilledRegisters registerMap /= 0 = CodeGenState registerMap [show SUB ++ " " ++ makeImm (show ((numSpilledRegisters registerMap + 1) * regSizeB)) ++ ", " ++ show Rsp]
+      | numSpilledRegisters registerMap /= 0 = CodeGenState registerMap [show SUBQ ++ " " ++ makeImm (show ((numSpilledRegisters registerMap + 1) * regSizeB)) ++ ", " ++ show Rsp]
       | otherwise = CodeGenState registerMap []
     registerMap = colorVariables liveRegs
 
@@ -245,7 +249,7 @@ genInst (Ret (Reg src)) = do
     then do
       emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show Rax
       let stackSize = (numSpilledRegisters m + 1) * regSizeB
-      emit $ show ADD ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
+      emit $ show ADDQ ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
       emit $ show RET
     else do
       emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show Rax
@@ -257,7 +261,7 @@ genInst (Ret (Con src)) = do
     then do
       emit $ show MOV ++ " " ++ makeImm src ++ ", " ++ show Rax
       let stackSize = (numSpilledRegisters m + 1) * regSizeB
-      emit $ show ADD ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
+      emit $ show ADDQ ++ " " ++ makeImm (show stackSize) ++ ", " ++ show Rsp
       emit $ show RET
     else do
       emit $ show MOV ++ " " ++ makeImm src ++ ", " ++ show Rax
