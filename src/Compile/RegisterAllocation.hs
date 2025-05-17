@@ -38,27 +38,27 @@ data X86_64Register
 
 instance Show X86_64Register where
   show :: X86_64Register -> String
-  show Rax = "%rax"
-  show Rbx = "%rbx"
-  show Rcx = "%rcx"
-  show Rdx = "%rdx"
-  show Rsi = "%rsi"
-  show Rdi = "%rdi"
-  show R8 = "%r8"
-  show R9 = "%r9"
-  show R10 = "%r10"
-  show R11 = "%r11"
-  show R12 = "%r12"
-  show R13 = "%r13"
-  show R14 = "%r14"
-  show R15 = "%r15"
-  show Rsp = "%rsp"
-  show Rbp = "%rbp"
+  show Rax = "%eax"
+  show Rbx = "%ebx"
+  show Rcx = "%ecx"
+  show Rdx = "%edx"
+  show Rsi = "%esi"
+  show Rdi = "%edi"
+  show R8 = "%r8d"
+  show R9 = "%r9d"
+  show R10 = "%r10d"
+  show R11 = "%r11d"
+  show R12 = "%r12d"
+  show R13 = "%r13d"
+  show R14 = "%r14d"
+  show R15 = "%r15d"
+  show Rsp = "%esp"
+  show Rbp = "%ebp"
   show (Spilled _) = error "Spilled register not supported in this context"
 
 -- | Size of registers in bytes
 regSizeB :: Int
-regSizeB = 8
+regSizeB = 4
 
 usableRegisters :: [X86_64Register]
 usableRegisters =
@@ -101,16 +101,16 @@ data Direction
 -- | Show instance for Operations on 32-bit integers
 instance Show Operations where
   show :: Operations -> String
-  show ADD = "addq"
-  show SUB = "subq"
-  show MUL = "imulq"
-  show DIV = "idivq"
-  show NEG = "negq"
-  show MOV = "movq"
-  show PUSH = "pushq"
-  show POP = "popq"
+  show ADD = "addl"
+  show SUB = "subl"
+  show MUL = "imull"
+  show DIV = "idivl"
+  show NEG = "negl"
+  show MOV = "movl"
+  show PUSH = "pushl"
+  show POP = "popl"
   show RET = "ret"
-  show CLTD = "cqo"
+  show CLTD = "cdq"
 
 srcSpillReg :: X86_64Register
 srcSpillReg = R14
