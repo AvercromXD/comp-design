@@ -217,16 +217,16 @@ genInst (Asgn dest (Reg src1) op (Reg src2)) = case op of
   Compile.AST.Mod -> divModOp ModResult src1 src2 dest
   _ -> error "Unsupported operation"
 genInst (Asgn dest (Reg src1) op (Con src2)) = case op of
-  Compile.AST.Add -> immRegOp ADD src2 src1 dest
-  Compile.AST.Sub -> immRegOp SUB src2 src1 dest
-  Compile.AST.Mul -> immRegOp MUL src2 src1 dest
+  Compile.AST.Add -> immRegOp' dest src1 ADD src2
+  Compile.AST.Sub -> immRegOp' dest src1 SUB src2
+  Compile.AST.Mul -> immRegOp' dest src1 MUL src2
   Compile.AST.Div -> error "Division cannot use immediate operands"
   Compile.AST.Mod -> error "Modulo cannot use immediate operands"
   _ -> error "Unsupported operation"
 genInst (Asgn dest (Con src1) op (Reg src2)) = case op of
-  Compile.AST.Add -> immRegOp ADD src1 src2 dest
-  Compile.AST.Sub -> immRegOp SUB src1 src2 dest
-  Compile.AST.Mul -> immRegOp MUL src1 src2 dest
+  Compile.AST.Add -> immRegOp dest src1 ADD src2
+  Compile.AST.Sub -> immRegOp dest src1 SUB src2
+  Compile.AST.Mul -> immRegOp dest src1 MUL src2
   Compile.AST.Div -> error "Division cannot use immediate operands"
   Compile.AST.Mod -> error "Modulo cannot use immediate operands"
   _ -> error "Unsupported operation"
@@ -293,14 +293,24 @@ divModOp resultType src1 src2 dest = do
   emit $ show MOV ++ " " ++ show (case resultType of DivResult -> Rax; ModResult -> Rdx) ++ ", " ++ show destReg
   storeRegister dest
 
-immRegOp :: Operations -> String -> Register -> Register -> CodeGen ()
-immRegOp SUB "0" src dest = do 
+-- | dest = imm op src
+immRegOp :: Register -> String -> Operations -> Register -> CodeGen ()
+immRegOp dest "0" SUB src = do 
   destReg <- loadDstRegister dest
   srcReg <- loadDstRegister src
   emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show destReg
   emit $ show NEG ++ " " ++ show destReg
   storeRegister dest
-immRegOp op imm src dest = do
+immRegOp dest imm op src = do
+  destReg <- loadDstRegister dest
+  srcReg <- loadSrcRegister src
+  emit $ show MOV ++ " " ++ makeImm imm ++ ", " ++ show destReg
+  emit $ show op ++ " " ++ show srcReg ++ ", " ++ show destReg
+  storeRegister dest
+
+-- | dest = src op imm
+immRegOp' :: Register -> Register -> Operations -> String -> CodeGen ()
+immRegOp' dest src op imm  = do
   destReg <- loadDstRegister dest
   srcReg <- loadSrcRegister src
   emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show destReg
