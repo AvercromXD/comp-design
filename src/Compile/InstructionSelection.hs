@@ -45,7 +45,9 @@ assignVar name op = do
 lookupVar :: VarName -> CodeGen Register
 lookupVar name = do
   m <- gets regMap
-  maybe freshReg return (Map.lookup name m)
+  case Map.lookup name m of
+    Just r -> return r
+    Nothing -> error "IS: Only lookup on declared variables allowed"
 
 -- | Add an instruction to the code
 emit :: Inst -> CodeGen ()
@@ -69,22 +71,24 @@ genStmt (Compile.AST.Init name e _) = do
 genStmt (Compile.AST.Asgn name (Just op) e _) = do
   rhs <- genExpr e
   r <- lookupVar name
+  r_fresh <- freshReg
+  assignVar name r_fresh
   case (op, rhs) of
     (Compile.AST.Mod, Con _) -> do
       r2 <- freshReg
       emit $ Compile.AAAST.Init r2 rhs
-      emit $ Compile.AAAST.Asgn r (Reg r) op (Reg r2)
+      emit $ Compile.AAAST.Asgn r_fresh (Reg r) op (Reg r2)
     (Compile.AST.Div, Con _) -> do
       r2 <- freshReg
       emit $ Compile.AAAST.Init r2 rhs
-      emit $ Compile.AAAST.Asgn r (Reg r) op (Reg r2)
+      emit $ Compile.AAAST.Asgn r_fresh (Reg r) op (Reg r2)
     (_, _) -> do
-      emit $ Compile.AAAST.Asgn r (Reg r) op rhs
-  
+      emit $ Compile.AAAST.Asgn r_fresh (Reg r) op rhs
 genStmt (Compile.AST.Asgn name Nothing e _) = do
   rhs <- genExpr e
-  r <- lookupVar name
-  emit $ Compile.AAAST.Init r rhs
+  r_fresh <- freshReg
+  assignVar name r_fresh
+  emit $ Compile.AAAST.Init r_fresh rhs
 genStmt (Compile.AST.Ret e _) = do
   -- Handle return statement (could be adapted based on your target language)
   -- For now, we'll just evaluate the expression
@@ -99,27 +103,47 @@ genExpr (IntExpr n _) =
 genExpr (Ident name _) = do
   r <- lookupVar name
   return $ Reg r
-genExpr (UnExpr op e) = do
+genExpr (UnExpr Neg e) = do
   opnd <- genExpr e
   r <- freshReg
   emit $ Compile.AAAST.Asgn r (Con "0") Sub opnd
   return $ Reg r
+genExpr (UnExpr op _) = error $ "Unary operator "++ show op ++ " not implemented"
 genExpr (BinExpr op e1 e2) = do
   opnd1 <- genExpr e1
   opnd2 <- genExpr e2
   r <- freshReg
 
-  emit $ Compile.AAAST.Init r opnd1
   -- case mod or div, has to store constants in a register first
-  case (op, opnd2) of
-    (Compile.AST.Mod, Con _) -> do
+  case (op, opnd1, opnd2) of
+    (Compile.AST.Mod, Con _, Reg _) -> do
+      r1 <- freshReg
+      emit $ Compile.AAAST.Init r1 opnd1
+      emit $ Compile.AAAST.Asgn r (Reg r1) op opnd2
+    (Compile.AST.Div, Con _, Reg _) -> do
+      r1 <- freshReg
+      emit $ Compile.AAAST.Init r1 opnd1
+      emit $ Compile.AAAST.Asgn r (Reg r1) op opnd2
+    (Compile.AST.Mod, Reg _, Con _) -> do
       r2 <- freshReg
       emit $ Compile.AAAST.Init r2 opnd2
-      emit $ Compile.AAAST.Asgn r (Reg r) op (Reg r2)
-    (Compile.AST.Div, Con _) -> do
+      emit $ Compile.AAAST.Asgn r opnd1 op (Reg r2)
+    (Compile.AST.Div, Reg _, Con _) -> do
       r2 <- freshReg
       emit $ Compile.AAAST.Init r2 opnd2
-      emit $ Compile.AAAST.Asgn r (Reg r) op (Reg r2)
-    (_, _) -> do
-      emit $ Compile.AAAST.Asgn r (Reg r) op opnd2
+      emit $ Compile.AAAST.Asgn r opnd1 op (Reg r2)
+    (Compile.AST.Mod, Con _, Con _) -> do
+      r1 <- freshReg
+      emit $ Compile.AAAST.Init r1 opnd1
+      r2 <- freshReg
+      emit $ Compile.AAAST.Init r2 opnd2
+      emit $ Compile.AAAST.Asgn r (Reg r1) op (Reg r2)
+    (Compile.AST.Div, Con _, Con _) -> do
+      r1 <- freshReg
+      emit $ Compile.AAAST.Init r1 opnd1
+      r2 <- freshReg
+      emit $ Compile.AAAST.Init r2 opnd2
+      emit $ Compile.AAAST.Asgn r (Reg r1) op (Reg r2)
+    (_, _, _) -> do
+      emit $ Compile.AAAST.Asgn r opnd1 op opnd2
   return $ Reg r
