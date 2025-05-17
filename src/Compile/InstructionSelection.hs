@@ -102,7 +102,7 @@ genExpr (Ident name _) = do
 genExpr (UnExpr op e) = do
   opnd <- genExpr e
   r <- freshReg
-  emit $ Compile.AAAST.Asgn r (Con "0") op opnd
+  emit $ Compile.AAAST.Asgn r (Con "0") Sub opnd
   return $ Reg r
 genExpr (BinExpr op e1 e2) = do
   opnd1 <- genExpr e1

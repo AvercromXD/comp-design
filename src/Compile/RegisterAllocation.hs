@@ -308,6 +308,11 @@ immRegOp op imm src dest = do
   storeRegister dest
 
 immOp :: Operations -> String -> String -> Register -> CodeGen ()
+immOp SUB "0" imm2 dest = do 
+  destReg <- loadDstRegister dest
+  emit $ show MOV ++ " " ++ makeImm imm2 ++ ", " ++ show destReg
+  emit $ show NEG ++ " " ++ show destReg
+  storeRegister dest
 immOp op imm1 imm2 dest = do
   destReg <- loadDstRegister dest
   emit $ show MOV ++ " " ++ makeImm imm1 ++ ", " ++ show destReg

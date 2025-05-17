@@ -30,7 +30,7 @@ instance Show AAAST where
 
 instance Show Inst where
   show (Init dest op) = "Init: " ++ "R" ++ show dest ++ " <- " ++ show op
-  show (Asgn dest op1 op op2) = "Assign: " ++ "R" ++ show dest ++ " <- " ++ "R" ++ show op1 ++ " " ++ show op ++ " " ++ show op2
+  show (Asgn dest op1 op op2) = "Assign: " ++  "R" ++ show dest ++ " <- " ++ show op1 ++ " " ++ show op ++ " " ++ show op2
   show (Ret op1) = "Return " ++ show op1
 
 instance Show Operand where
