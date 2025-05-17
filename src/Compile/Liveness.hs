@@ -48,6 +48,13 @@ liveness state = live $ execState liveness' state
     liveness' = do
       liveList <- gets live
       mapM_ (tagLive . fromIntegral) (reverse [0 .. length liveList - 1])
+      mapM_ (tagDefLive . fromIntegral) [0.. length liveList - 1]
+
+tagDefLive :: Line -> TaggedVariableLines ()
+tagDefLive l = do 
+  regs <- registersInLine l
+  def <- filterM (`isDefined` l) regs
+  mapM_(`makeLive` l) def
 
 tagLive :: Line -> TaggedVariableLines ()
 tagLive l = do
