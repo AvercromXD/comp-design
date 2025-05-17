@@ -140,8 +140,7 @@ allocateRegisters (Block inst) liveRegs = code $ execState (genBlock (filter (`f
 
 filterLiveInsts :: Inst -> RegisterMap -> Bool
 filterLiveInsts (Init d _) m = Map.member d m
-filterLiveInsts (Asgn d _ _) m = Map.member d m
-filterLiveInsts (UnOpAsgn d _) m = Map.member d m
+filterLiveInsts (Asgn d _ _ _) m = Map.member d m
 filterLiveInsts (Ret _) _ = True
 
 emit :: String -> CodeGen ()
@@ -208,27 +207,35 @@ isSpilled (Spilled _) = True
 isSpilled _ = False
 
 genInst :: Inst -> CodeGen ()
-genInst (Init dest (Reg src)) = binOp MOV src dest
-genInst (Init dest (Con src)) = immOp MOV src dest
-genInst (Asgn dest op (Reg src)) = case op of
-  Compile.AST.Add -> binOp ADD src dest
-  Compile.AST.Sub -> binOp SUB src dest
-  Compile.AST.Mul -> binOp MUL src dest
-  Compile.AST.Div -> divModOp DivResult src dest
-  Compile.AST.Mod -> divModOp ModResult src dest
+genInst (Init dest (Reg src)) = binOp' MOV src dest
+genInst (Init dest (Con src)) = immOp' MOV src dest
+genInst (Asgn dest (Reg src1) op (Reg src2)) = case op of
+  Compile.AST.Add -> binOp ADD src1 src2 dest
+  Compile.AST.Sub -> binOp SUB src1 src2 dest
+  Compile.AST.Mul -> binOp MUL src1 src2 dest
+  Compile.AST.Div -> divModOp DivResult src1 src2 dest
+  Compile.AST.Mod -> divModOp ModResult src1 src2 dest
   _ -> error "Unsupported operation"
-genInst (Asgn dest op (Con src)) = case op of
-  Compile.AST.Add -> immOp ADD src dest
-  Compile.AST.Sub -> immOp SUB src dest
-  Compile.AST.Mul -> immOp MUL src dest
-  Compile.AST.Div -> immDivModOp DivResult src dest
-  Compile.AST.Mod -> immDivModOp ModResult src dest
+genInst (Asgn dest (Reg src1) op (Con src2)) = case op of
+  Compile.AST.Add -> immRegOp ADD src2 src1 dest
+  Compile.AST.Sub -> immRegOp SUB src2 src1 dest
+  Compile.AST.Mul -> immRegOp MUL src2 src1 dest
+  Compile.AST.Div -> error "Division cannot use immediate operands"
+  Compile.AST.Mod -> error "Modulo cannot use immediate operands"
   _ -> error "Unsupported operation"
-genInst (UnOpAsgn dest op) = case op of
-  Compile.AST.Neg -> do
-    destReg <- loadDstRegister dest
-    emit $ show NEG ++ " " ++ show destReg
-    storeRegister dest
+genInst (Asgn dest (Con src1) op (Reg src2)) = case op of
+  Compile.AST.Add -> immRegOp ADD src1 src2 dest
+  Compile.AST.Sub -> immRegOp SUB src1 src2 dest
+  Compile.AST.Mul -> immRegOp MUL src1 src2 dest
+  Compile.AST.Div -> error "Division cannot use immediate operands"
+  Compile.AST.Mod -> error "Modulo cannot use immediate operands"
+  _ -> error "Unsupported operation"
+genInst (Asgn dest (Con src1) op (Con src2)) = case op of
+  Compile.AST.Add -> immOp ADD src1 src2 dest
+  Compile.AST.Sub -> immOp SUB src1 src2 dest
+  Compile.AST.Mul -> immOp MUL src1 src2 dest
+  Compile.AST.Div -> error "Division cannot use immediate operands"
+  Compile.AST.Mod -> error "Modulo cannot use immediate operands"
   _ -> error "Unsupported operation"
 genInst (Ret (Reg src)) = do
   m <- gets regMap
@@ -259,34 +266,56 @@ genInst (Ret (Con src)) = do
 -- Result type for division/modulo
 data DivModResult = DivResult | ModResult
 
-binOp :: Operations -> Register -> Register -> CodeGen ()
-binOp op src dest = do
+binOp :: Operations -> Register -> Register -> Register -> CodeGen ()
+binOp op src1 src2 dest = do
+  src1Reg <- loadSrcRegister src1
+  destReg <- loadDstRegister dest
+  emit $ show MOV ++ " " ++ show src1Reg ++ ", " ++ show destReg
+  src2Reg <- loadSrcRegister src2
+  emit $ show op ++ " " ++ show src2Reg ++ ", " ++ show destReg
+  storeRegister dest
+
+binOp' :: Operations -> Register -> Register -> CodeGen ()
+binOp' op src dest = do
   srcReg <- loadSrcRegister src
   destReg <- loadDstRegister dest
   emit $ show op ++ " " ++ show srcReg ++ ", " ++ show destReg
   storeRegister dest
 
-divModOp :: DivModResult -> Register -> Register -> CodeGen ()
-divModOp resultType src dest = do
+divModOp :: DivModResult -> Register -> Register -> Register -> CodeGen ()
+divModOp resultType src1 src2 dest = do
+  destReg <- loadDstRegister dest
+  src1Reg <- loadSrcRegister src1
+  emit $ show MOV ++ " " ++ show src1Reg ++ ", " ++ show Rax
+  emit $ show CLTD
+  src2Reg <- loadSrcRegister src2
+  emit $ show DIV ++ " " ++ show src2Reg
+  emit $ show MOV ++ " " ++ show (case resultType of DivResult -> Rax; ModResult -> Rdx) ++ ", " ++ show destReg
+  storeRegister dest
+
+immRegOp :: Operations -> String -> Register -> Register -> CodeGen ()
+immRegOp SUB "0" src dest = do 
+  destReg <- loadDstRegister dest
+  srcReg <- loadDstRegister src
+  emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show destReg
+  emit $ show NEG ++ " " ++ show destReg
+  storeRegister dest
+immRegOp op imm src dest = do
   destReg <- loadDstRegister dest
   srcReg <- loadSrcRegister src
-  emit $ show MOV ++ " " ++ show destReg ++ ", " ++ show Rax
-  emit $ show CLTD
-  emit $ show DIV ++ " " ++ show srcReg
-  emit $ show MOV ++ " " ++ show (case resultType of DivResult -> Rax; ModResult -> Rdx) ++ ", " ++ show destReg
+  emit $ show MOV ++ " " ++ show srcReg ++ ", " ++ show destReg
+  emit $ show op ++ " " ++ makeImm imm ++ ", " ++ show destReg
   storeRegister dest
 
-immDivModOp :: DivModResult -> String -> Register -> CodeGen ()
-immDivModOp resultType imm dest = do
+immOp :: Operations -> String -> String -> Register -> CodeGen ()
+immOp op imm1 imm2 dest = do
   destReg <- loadDstRegister dest
-  emit $ show MOV ++ " " ++ show destReg ++ ", " ++ show Rax
-  emit $ show CLTD
-  emit $ show DIV ++ " " ++ makeImm imm
-  emit $ show MOV ++ " " ++ show (case resultType of DivResult -> Rax; ModResult -> Rdx) ++ ", " ++ show destReg
+  emit $ show MOV ++ " " ++ makeImm imm1 ++ ", " ++ show destReg
+  emit $ show op ++ " " ++ makeImm imm2 ++ ", " ++ show destReg
   storeRegister dest
 
-immOp :: Operations -> String -> Register -> CodeGen ()
-immOp op imm dest = do
+immOp' :: Operations -> String -> Register -> CodeGen ()
+immOp' op imm dest = do
   destReg <- loadDstRegister dest
   emit $ show op ++ " " ++ makeImm imm ++ ", " ++ show destReg
   storeRegister dest

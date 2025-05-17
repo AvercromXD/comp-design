@@ -25,18 +25,13 @@ compile job = do
   semanticAnalysis ast
   let code = codeGen ast
   let taggedLines = tagLines code
-  -- liftIO $ appendFile (out job) "\n"
-  -- liftIO $ appendFile (out job) (show taggedLines)
   let live = liveness taggedLines
   let output = allocateRegisters code live
   starterCode <- liftIO $ readFile "res/starter_code"
   liftIO $ writeFile (out job) starterCode
-  --liftIO $ appendFile (out job) "\n"
-  --liftIO $ appendFile (out job) (show ast)
-  --liftIO $ appendFile (out job) "\n"
-  --liftIO $ appendFile (out job) (show code)
-  --liftIO $ appendFile (out job) "\n"
-  --liftIO $ appendFile (out job) (show live)
+  liftIO $ print ast
+  liftIO $ print code
+  liftIO $ print live
   liftIO $ appendFile (out job) "\n"
   liftIO $ appendFile (out job) (intercalate "\n" output)
   liftIO $ appendFile (out job) "\n"

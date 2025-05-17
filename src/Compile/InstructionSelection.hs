@@ -73,13 +73,13 @@ genStmt (Compile.AST.Asgn name (Just op) e _) = do
     (Compile.AST.Mod, Con _) -> do
       r2 <- freshReg
       emit $ Compile.AAAST.Init r2 rhs
-      emit $ Compile.AAAST.Asgn r op (Reg r2)
+      emit $ Compile.AAAST.Asgn r (Reg r) op (Reg r2)
     (Compile.AST.Div, Con _) -> do
       r2 <- freshReg
       emit $ Compile.AAAST.Init r2 rhs
-      emit $ Compile.AAAST.Asgn r op (Reg r2)
+      emit $ Compile.AAAST.Asgn r (Reg r) op (Reg r2)
     (_, _) -> do
-      emit $ Compile.AAAST.Asgn r op rhs
+      emit $ Compile.AAAST.Asgn r (Reg r) op rhs
   
 genStmt (Compile.AST.Asgn name Nothing e _) = do
   rhs <- genExpr e
@@ -101,20 +101,13 @@ genExpr (Ident name _) = do
   return $ Reg r
 genExpr (UnExpr op e) = do
   opnd <- genExpr e
-  -- For unary operations, we can use a dummy second operand (or adapt the AAAST to support unary ops)
-  -- Using Con 0 as a placeholder, but this should be adapted to your needs
   r <- freshReg
-  emit $ Compile.AAAST.Init r opnd
-  emit $ UnOpAsgn r op
+  emit $ Compile.AAAST.Asgn r (Con "0") op opnd
   return $ Reg r
 genExpr (BinExpr op e1 e2) = do
   opnd1 <- genExpr e1
   opnd2 <- genExpr e2
   r <- freshReg
-
-  -- Maximum munch for binary operations
-  -- Here we can add specific patterns for optimal instruction selection
-  -- For now, we'll use a general case
 
   emit $ Compile.AAAST.Init r opnd1
   -- case mod or div, has to store constants in a register first
@@ -122,11 +115,11 @@ genExpr (BinExpr op e1 e2) = do
     (Compile.AST.Mod, Con _) -> do
       r2 <- freshReg
       emit $ Compile.AAAST.Init r2 opnd2
-      emit $ Compile.AAAST.Asgn r op (Reg r2)
+      emit $ Compile.AAAST.Asgn r (Reg r) op (Reg r2)
     (Compile.AST.Div, Con _) -> do
       r2 <- freshReg
       emit $ Compile.AAAST.Init r2 opnd2
-      emit $ Compile.AAAST.Asgn r op (Reg r2)
+      emit $ Compile.AAAST.Asgn r (Reg r) op (Reg r2)
     (_, _) -> do
-      emit $ Compile.AAAST.Asgn r op opnd2
+      emit $ Compile.AAAST.Asgn r (Reg r) op opnd2
   return $ Reg r

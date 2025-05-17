@@ -17,8 +17,7 @@ data AAAST
 
 data Inst
   = Init Register Operand -- d <- s
-  | Asgn Register Op Operand -- d <- d Op s
-  | UnOpAsgn Register Op -- d <- Op d
+  | Asgn Register Operand Op Operand -- d <- s_1 Op s_2
   | Ret Operand
 
 data Operand
@@ -31,8 +30,7 @@ instance Show AAAST where
 
 instance Show Inst where
   show (Init dest op) = "Init: " ++ "R" ++ show dest ++ " <- " ++ show op
-  show (Asgn dest op op1) = "Assign: " ++ "R" ++ show dest ++ " <- " ++ "R" ++ show dest ++ " " ++ show op ++ " " ++ show op1
-  show (UnOpAsgn dest op) = "UnOpAssign: " ++ "R" ++ show dest ++ " <- " ++ show op ++ " " ++ "R" ++ show dest
+  show (Asgn dest op1 op op2) = "Assign: " ++ "R" ++ show dest ++ " <- " ++ "R" ++ show op1 ++ " " ++ show op ++ " " ++ show op2
   show (Ret op1) = "Return " ++ show op1
 
 instance Show Operand where

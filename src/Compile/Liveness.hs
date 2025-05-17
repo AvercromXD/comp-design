@@ -1,4 +1,5 @@
 {-# LANGUAGE InstanceSigs #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Compile.Liveness where
 
 import Compile.AAAST (AAAST (..), Inst (..), Operand (..))
@@ -150,15 +151,21 @@ tagLine (Init r1 (Reg r2)) l = do
 tagLine (Init r (Con _)) l = do
   let m = markAsDef r Map.empty
   updateState m (Just (l + 1))
-tagLine (Asgn r1 _ (Reg r2)) l = do
+tagLine (Asgn r (Reg r1) _ (Reg r2)) l = do
   let m = markAsUse r2 Map.empty
-  let m1 = markAsUseDef r1 m
+  let m1 = markAsUse r1 m
+  let m2 = if r == r1 || r == r2 then markAsUseDef r m1 else markAsDef r m1
+  updateState m2 (Just (l + 1))
+tagLine (Asgn r (Reg r1) _ (Con _)) l = do
+  let m = markAsUse r1 Map.empty
+  let m1 = if r == r1 then do markAsUseDef r m else markAsDef r m
   updateState m1 (Just (l + 1))
-tagLine (Asgn r _ (Con _)) l = do
-  let m = markAsUseDef r Map.empty
-  updateState m (Just (l + 1))
-tagLine (UnOpAsgn r _) l = do
-  let m = handleRegOperand r r Map.empty
+tagLine (Asgn r (Con _) _ (Reg r1)) l = do
+  let m = markAsUse r1 Map.empty
+  let m1 = if r == r1 then markAsUseDef r m else markAsDef r m
+  updateState m1 (Just (l + 1))
+tagLine (Asgn r (Con _) _ (Con _)) l = do
+  let m = markAsDef r Map.empty
   updateState m (Just (l + 1))
 tagLine (Ret (Reg r)) _ = do
   let m = markAsUse r Map.empty
