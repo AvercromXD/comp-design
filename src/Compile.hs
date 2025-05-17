@@ -33,10 +33,10 @@ compile job = do
   liftIO $ writeFile (out job) starterCode
   --liftIO $ appendFile (out job) "\n"
   --liftIO $ appendFile (out job) (show ast)
-  liftIO $ appendFile (out job) "\n"
-  liftIO $ appendFile (out job) (show code)
-  liftIO $ appendFile (out job) "\n"
-  liftIO $ appendFile (out job) (show live)
+  --liftIO $ appendFile (out job) "\n"
+  --liftIO $ appendFile (out job) (show code)
+  --liftIO $ appendFile (out job) "\n"
+  --liftIO $ appendFile (out job) (show live)
   liftIO $ appendFile (out job) "\n"
   liftIO $ appendFile (out job) (intercalate "\n" output)
   liftIO $ appendFile (out job) "\n"
